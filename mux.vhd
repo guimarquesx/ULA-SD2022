@@ -1,0 +1,30 @@
+-- Aluno: Guilherme Marques Ribeiro
+-- DRE: 116060661
+
+-- Declaração de bibliotecas:
+library ieee;
+use ieee.std_logic_1164.all;
+
+ENTITY mux IS
+
+	PORT (
+			B, B_barrado , mux1_zero , mux1_comp1	: IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+			seletor        	               : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
+			s    	                    		   : OUT STD_LOGIC_VECTOR(3 DOWNTO 0));
+
+END mux;
+			
+ARCHITECTURE dataflow OF mux IS
+
+BEGIN
+
+-- Se o seletor for "000", B é selecionado normalmente;
+-- Se o seletor for "001", seleciona B barrado;
+-- Se não for nenhum, seleciona "000".
+
+s <= B              WHEN (seletor = "000") ELSE
+			B_barrado      WHEN (seletor = "001") ELSE
+			mux1_comp1 		WHEN (seletor = "100") ELSE 
+			mux1_zero ;
+			
+END dataflow;

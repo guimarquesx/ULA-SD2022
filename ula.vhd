@@ -1,0 +1,145 @@
+-- Aluno: Guilherme Marques Ribeiro
+-- DRE: 116060661
+
+-- Declaração de bibliotecas:
+library ieee;
+use ieee.STD_LOGIC_1164.all;
+
+-- O objetivo deste módulo é criar uma ULA que contém 8 operações, que são definidas
+-- a partir de um seletor, a partir disso, têm-se uma saída da operação feita 
+-- e 4 flags que representam o Zero, Sinal, Overflow e Carry Out.
+
+ENTITY ula IS
+	GENERIC (N: INTEGER := 4);
+	PORT(
+	      A, B  		                                : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+		   seletor 	                                : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
+		   flagCout, flagOver, flagZero, flagSinal  : OUT STD_LOGIC;
+		   SAIDA                                    : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+		);
+			
+END ula;
+
+ARCHITECTURE structural OF ula IS
+
+SIGNAL bcomp1, acomp1, B2, Soma, Res_Norml, Result, mux1_zero, mux1_comp1, A2 : STD_LOGIC_VECTOR(3 DOWNTO 0);
+SIGNAL Cin, verifica	: STD_LOGIC;
+
+-- Declarando o componente somador:
+	COMPONENT somador IS
+		PORT(
+		     A, B           : IN STD_LOGIC_VECTOR(N-1 DOWNTO 0);
+			  cin            : IN STD_LOGIC;
+			  Sum            : OUT STD_LOGIC_VECTOR(N-1 DOWNTO 0);
+			  Cout, Overflow : OUT STD_LOGIC
+			);
+				
+	END COMPONENT;
+	
+	SIGNAL Cout, Overflow : STD_LOGIC;
+	SIGNAL Decr1          : STD_LOGIC_VECTOR(N-1 DOWNTO 0);
+	
+-- Declarando o componente troca_sinal:
+	COMPONENT troca_sinal IS
+		PORT( 
+				A     : IN STD_LOGIC_VECTOR(3 downto 0);
+				Al    : IN STD_LOGIC_VECTOR(3 downto 0);
+				K  	: IN STD_LOGIC;
+				A2    : OUT STD_LOGIC_VECTOR(3 downto 0)
+			);
+	
+	END COMPONENT;
+	
+-- Declarando o componente mux (Seletor de B para A+B ou A-B)
+	COMPONENT mux IS
+		PORT(
+			    B, B_barrado , mux1_zero , mux1_comp1  : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+			    seletor                             : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
+			    s      	                  : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+			);
+				
+	END COMPONENT;
+	
+-- Declarando o componente Mux_Seletor (Seletor das operações)
+	COMPONENT Mux_Seletor IS
+		PORT(
+			Seletor 							: IN  STD_LOGIC_VECTOR(2 DOWNTO 0);
+			Soma,Res_Norml,Res_AND,Res_XOR  : IN  STD_LOGIC_VECTOR(3 DOWNTO 0);
+			Saida 						    : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+			);
+	END COMPONENT;
+
+-- Declarando o componente normalizador (em A)
+	COMPONENT normalizador IS 
+	    PORT(
+		        A  : IN  STD_LOGIC_VECTOR(3 DOWNTO 0);
+		        S  : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+		    );
+	
+	END COMPONENT;
+	
+-- Declarando o componente and_op (operação AND)	
+	COMPONENT and_op IS
+		PORT(
+			  A, B 	: IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+			  S		: OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+			);
+	END COMPONENT;
+	
+	SIGNAL Res_AND : STD_LOGIC_VECTOR(3 DOWNTO 0);
+	
+-- Declarando o componente xor_op (operação XOR)	
+	COMPONENT xor_op IS
+		PORT(
+		      A, B 	: IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+			  S		: OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+			);
+	END COMPONENT;
+	
+	SIGNAL Res_XOR : STD_LOGIC_VECTOR(3 DOWNTO 0);
+
+BEGIN
+
+-- Atribuindo valores iniciais aos sinais:
+
+mux1_zero <= "0000" ;
+mux1_comp1 <= "1110" ;
+
+SAIDA <= Result;
+
+Cin <= seletor(0) OR seletor(1) OR seletor(2) ;
+verifica <= (not seletor(2))  AND (seletor(1)) AND (seletor(0));
+
+acomp1 <= NOT A;
+bcomp1 <= NOT B;
+
+-- Instanciando componentes:
+
+-- "Soma" é a saida do somador, porém é usado para as operações de Soma, Subtração, Incremento de 1 e Decremento de 1
+f_Somad : somador PORT MAP(A2, B2, Cin, Soma, flagCout, flagOver);
+
+-- Operação troca sinal (de a)
+f_trocS : troca_sinal PORT MAP(A, acomp1, verifica, A2);
+
+-- Operação que normaliza os bits do operando a
+f_Normaliz : normalizador PORT MAP(A, Res_Norml);
+
+-- Operação lógica AND
+f_opAnd : and_op PORT MAP(A, B, Res_AND);
+
+-- Operação lógica XOR
+f_opXor : xor_op PORT MAP(A, B, Res_XOR);
+
+-- MUX que, depndendo da seleção, entrega o operando B normalmente, barrado ou zerado ("0000")
+f_mux1 : mux PORT MAP(b, bcomp1, mux1_zero, mux1_comp1, seletor, b2);
+
+-- MUX para seleção das 8 operações
+f_SelMux : Mux_Seletor PORT MAP(seletor, Soma, Res_Norml, Res_AND, Res_XOR, Result); 
+
+-- Flag zero utilizando portas OR e NOR
+flagZero <= (Result(3) OR Result(2)) NOR (Result(1) OR Result(0));
+
+-- A flag sinal acenderá quando o bit mais significativo do resultado for '1'
+flagSinal <= Result(3);
+
+END structural;

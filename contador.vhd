@@ -1,0 +1,322 @@
+-- Aluno: Guilherme Marques Ribeiro
+-- DRE: 116060661
+
+-- Para simulação no Labsland, esse é o arquivo top end que carregará o componente da ULA, que possui todos os componentes da sua configuração
+
+-- Declaração de bibliotecas:
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.std_logic_unsigned.all;
+
+-- Definindo a entity com as portas de acordo com a placa FPGA
+ENTITY contador IS
+  PORT (
+        G_CLOCK_50 : IN  STD_LOGIC;                     -- Clock de 50 MHz, ou seja, contador a cada 2 segundos
+        V_BT       : IN  STD_LOGIC_VECTOR(0 DOWNTO 0);  -- Botão da placa FPGA
+        V_SW       : IN  STD_LOGIC_VECTOR(2 DOWNTO 0);  -- Switches da placa FPGA
+        G_LEDG     : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);  -- LEDs verdes
+        G_LEDR     : OUT STD_LOGIC_VECTOR(17 DOWNTO 0); -- LEDs vermelhos
+    
+        G_HEX7, G_HEX6, G_HEX5, G_HEX4, G_HEX1, G_HEX0 : OUT STD_LOGIC_VECTOR(6 DOWNTO 0) -- Displays de 7 segmentos
+       ); 
+    
+END contador;
+
+ARCHITECTURE TOP OF contador IS
+
+-- Declaração do componente da ULA
+
+COMPONENT ula is
+	PORT(
+	       A,B  		                            : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+		   seletor 	                                : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
+		   flagCout, flagOver, flagZero, flagSinal  : OUT STD_LOGIC;
+		   SAIDA                                    : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+		);
+			
+END COMPONENT;
+
+-- Declaração dos sinais da ULA
+
+SIGNAL seletor                                 : STD_LOGIC_VECTOR(2 DOWNTO 0);
+SIGNAL flagCout, flagOver, flagZero, flagSinal : STD_LOGIC;
+SIGNAL SAIDA                                   : STD_LOGIC_VECTOR(3 DOWNTO 0);
+
+-- Declaração de sinais do contador
+
+SIGNAL COUNT_a, COUNT_b                : STD_LOGIC_VECTOR(3 DOWNTO 0);
+SIGNAL FREQ_DIVIDER_a, FREQ_DIVIDER_b  : INTEGER RANGE 1 TO 50000000;
+  
+-- Declaração de sinais dos displays de 7 segmentos a serem mapeados de acordo com as entradas e a saída
+  
+-- Displays do operando A 
+SIGNAL OUTPUT_7SEGMENT_7 : STD_LOGIC_VECTOR(6 DOWNTO 0);
+SIGNAL OUTPUT_7SEGMENT_6 : STD_LOGIC_VECTOR(6 DOWNTO 0);
+  
+-- Displays do operando B
+SIGNAL OUTPUT_7SEGMENT_5 : STD_LOGIC_VECTOR(6 DOWNTO 0);
+SIGNAL OUTPUT_7SEGMENT_4 : STD_LOGIC_VECTOR(6 DOWNTO 0);
+  
+-- Displays do resultado da operação
+SIGNAL OUTPUT_7SEGMENT_1 : STD_LOGIC_VECTOR(6 DOWNTO 0);
+SIGNAL OUTPUT_7SEGMENT_0 : STD_LOGIC_VECTOR(6 DOWNTO 0);    
+ 
+-- Resultado das operações lógicas usando os LEDs vermelhos
+SIGNAL OUTPUT_RLEDS : STD_LOGIC_VECTOR(17 DOWNTO 0);
+  
+-- Mostrando flags usando os LEDs verdes
+SIGNAL OUTPUT_GLEDS : STD_LOGIC_VECTOR(3 DOWNTO 0);
+  
+  BEGIN
+
+    -- Instanciando componentes:
+
+    usando_ULA : ula PORT MAP(COUNT_A, COUNT_B, seletor, flagCout, flagOver, flagZero, flagSinal, SAIDA);
+
+    -- Atribuindo os sinais a seus respectivos displays de 7 segmentos
+    
+    -- Display de 7 segmentos de A:
+    G_HEX7 <= OUTPUT_7SEGMENT_7;
+    G_HEX6 <= OUTPUT_7SEGMENT_6;
+    
+    -- Displays de 7 segmentos de B:
+    G_HEX5 <= OUTPUT_7SEGMENT_5;
+    G_HEX4 <= OUTPUT_7SEGMENT_4;
+    
+    -- Displays do resultado:
+    G_HEX1 <= OUTPUT_7SEGMENT_1;
+    G_HEX0 <= OUTPUT_7SEGMENT_0;
+    
+    -- LEDs vermelhos para representação do resultados das operações lógicas
+    G_LEDR <= OUTPUT_RLEDS;
+
+    -- O seletor vai ser definido a partir dos switches da FPGA
+    seletor  <= V_SW;
+    
+    -- LEDs verdes representando as flags de saída da ULA
+    G_LEDG <= OUTPUT_GLEDS;
+    
+    -- Precisamos de uma lógica para representar um valor a cada segundo. Para isso, será necessário um divisor de frequência para cada operando.
+    
+    -- Divisor de frequência para o operando A:
+    PROCESS(G_CLOCK_50, V_BT)
+      BEGIN
+        -- Reset da contagem ao apertar o botão "KEY0" da placa
+        IF V_BT(0) = '0' THEN
+	        FREQ_DIVIDER_a <= 1;                    
+        ELSIF rising_edge(G_CLOCK_50) THEN
+	        FREQ_DIVIDER_a <= FREQ_DIVIDER_a + 1;
+        END IF;
+    END PROCESS;
+    
+    -- Contador de A:
+    PROCESS(G_CLOCK_50, V_BT)
+      BEGIN
+        IF V_BT(0) = '0' THEN
+	        COUNT_a <= "0000";
+        ELSIF rising_edge(G_CLOCK_50) THEN
+        	IF FREQ_DIVIDER_a = 50000000 AND COUNT_b = "1111" THEN	          
+	          COUNT_a <= COUNT_a + 1;
+            END IF;
+        END IF;
+    END PROCESS;
+
+    -- Divisor de frequência para o operando B:
+    PROCESS(G_CLOCK_50, V_BT)
+      BEGIN
+        -- Reseta a contagem ao apertar o botão "KEY0" da placa FPGA
+        IF V_BT(0) = '0' THEN
+	        FREQ_DIVIDER_b <= 1;
+        ELSIF rising_edge(G_CLOCK_50) THEN
+	        FREQ_DIVIDER_b <= FREQ_DIVIDER_b + 1;
+        END IF;
+    END PROCESS;
+    
+    -- Contador de A:
+    PROCESS(G_CLOCK_50, V_BT)
+      BEGIN
+        -- Reseta a contagem ao apertar o botão "KEY0" da placa FPGA
+        IF V_BT(0) = '0' THEN
+	        COUNT_b <= "0000";
+        ELSIF rising_edge(G_CLOCK_50) THEN
+        	IF FREQ_DIVIDER_b = 50000000 THEN
+	          COUNT_b <= COUNT_b + 1;
+            END IF;
+        END IF;
+    END PROCESS;
+    
+    -- Listando a faixa de números de 4 bits representáveis em complemento de 2 para o display de 7 segmentos
+    PROCESS(COUNT_a, COUNT_b, SAIDA)
+      BEGIN
+      
+        -- Para o operando A:
+        CASE COUNT_a IS
+			WHEN "0000" => OUTPUT_7SEGMENT_6 <= "1000000"; --  0 
+			WHEN "0001" => OUTPUT_7SEGMENT_6 <= "1111001"; --  1 
+			WHEN "0010" => OUTPUT_7SEGMENT_6 <= "0100100"; --  2 
+			WHEN "0011" => OUTPUT_7SEGMENT_6 <= "0110000"; --  3
+			WHEN "0100" => OUTPUT_7SEGMENT_6 <= "0011001"; --  4
+			WHEN "0101" => OUTPUT_7SEGMENT_6 <= "0010010"; --  5
+			WHEN "0110" => OUTPUT_7SEGMENT_6 <= "0000010"; --  6
+			WHEN "0111" => OUTPUT_7SEGMENT_6 <= "1111000"; --  7 
+			WHEN "1000" => OUTPUT_7SEGMENT_6 <= "0000000"; -- -8
+			WHEN "1001" => OUTPUT_7SEGMENT_6 <= "1111000"; -- -7 
+			WHEN "1010" => OUTPUT_7SEGMENT_6 <= "0000010"; -- -6
+			WHEN "1011" => OUTPUT_7SEGMENT_6 <= "0010010"; -- -5 
+			WHEN "1100" => OUTPUT_7SEGMENT_6 <= "0011001"; -- -4 
+			WHEN "1101" => OUTPUT_7SEGMENT_6 <= "0110000"; -- -3 
+			WHEN "1110" => OUTPUT_7SEGMENT_6 <= "0100100"; -- -2
+			WHEN "1111" => OUTPUT_7SEGMENT_6 <= "1111001"; -- -1 
+			WHEN OTHERS => OUTPUT_7SEGMENT_6 <= "1111111"; -- apaga display
+        END CASE;
+        
+        -- Para o operando B:
+        CASE COUNT_b IS
+			WHEN "0000" => OUTPUT_7SEGMENT_4 <= "1000000"; --  0 
+			WHEN "0001" => OUTPUT_7SEGMENT_4 <= "1111001"; --  1 
+			WHEN "0010" => OUTPUT_7SEGMENT_4 <= "0100100"; --  2 
+			WHEN "0011" => OUTPUT_7SEGMENT_4 <= "0110000"; --  3
+			WHEN "0100" => OUTPUT_7SEGMENT_4 <= "0011001"; --  4
+			WHEN "0101" => OUTPUT_7SEGMENT_4 <= "0010010"; --  5
+			WHEN "0110" => OUTPUT_7SEGMENT_4 <= "0000010"; --  6
+			WHEN "0111" => OUTPUT_7SEGMENT_4 <= "1111000"; --  7 
+			WHEN "1000" => OUTPUT_7SEGMENT_4 <= "0000000"; -- -8
+			WHEN "1001" => OUTPUT_7SEGMENT_4 <= "1111000"; -- -7 
+			WHEN "1010" => OUTPUT_7SEGMENT_4 <= "0000010"; -- -6
+			WHEN "1011" => OUTPUT_7SEGMENT_4 <= "0010010"; -- -5 
+			WHEN "1100" => OUTPUT_7SEGMENT_4 <= "0011001"; -- -4 
+			WHEN "1101" => OUTPUT_7SEGMENT_4 <= "0110000"; -- -3 
+			WHEN "1110" => OUTPUT_7SEGMENT_4 <= "0100100"; -- -2
+			WHEN "1111" => OUTPUT_7SEGMENT_4 <= "1111001"; -- -1 
+			WHEN OTHERS => OUTPUT_7SEGMENT_4 <= "1111111"; -- apaga display
+        END CASE;
+        
+        -- Para o resultado:
+        CASE SAIDA IS
+			WHEN "0000" => OUTPUT_7SEGMENT_0 <= "1000000"; --  0 
+			WHEN "0001" => OUTPUT_7SEGMENT_0 <= "1111001"; --  1 
+			WHEN "0010" => OUTPUT_7SEGMENT_0 <= "0100100"; --  2 
+			WHEN "0011" => OUTPUT_7SEGMENT_0 <= "0110000"; --  3
+			WHEN "0100" => OUTPUT_7SEGMENT_0 <= "0011001"; --  4
+			WHEN "0101" => OUTPUT_7SEGMENT_0 <= "0010010"; --  5
+			WHEN "0110" => OUTPUT_7SEGMENT_0 <= "0000010"; --  6
+			WHEN "0111" => OUTPUT_7SEGMENT_0 <= "1111000"; --  7 
+			WHEN "1000" => OUTPUT_7SEGMENT_0 <= "0000000"; -- -8
+			WHEN "1001" => OUTPUT_7SEGMENT_0 <= "1111000"; -- -7 
+			WHEN "1010" => OUTPUT_7SEGMENT_0 <= "0000010"; -- -6
+			WHEN "1011" => OUTPUT_7SEGMENT_0 <= "0010010"; -- -5 
+			WHEN "1100" => OUTPUT_7SEGMENT_0 <= "0011001"; -- -4 
+			WHEN "1101" => OUTPUT_7SEGMENT_0 <= "0110000"; -- -3 
+			WHEN "1110" => OUTPUT_7SEGMENT_0 <= "0100100"; -- -2
+			WHEN "1111" => OUTPUT_7SEGMENT_0 <= "1111001"; -- -1 
+			WHEN OTHERS => OUTPUT_7SEGMENT_0 <= "1111111"; -- apaga display
+        END CASE;
+        
+        -- Apagando os displays apenas quando uma operação lógica é selecionada
+        CASE seletor IS
+            WHEN "101" => OUTPUT_7SEGMENT_6 <= "1111111";
+                          OUTPUT_7SEGMENT_4 <= "1111111";
+                          OUTPUT_7SEGMENT_0 <= "1111111";
+
+            WHEN "110" => OUTPUT_7SEGMENT_6 <= "1111111";
+                          OUTPUT_7SEGMENT_4 <= "1111111";
+                          OUTPUT_7SEGMENT_0 <= "1111111";                          
+                          
+            WHEN "111" => OUTPUT_7SEGMENT_6 <= "1111111";
+                          OUTPUT_7SEGMENT_4 <= "1111111";
+                          OUTPUT_7SEGMENT_0 <= "1111111";                            
+            
+            WHEN OTHERS => NULL;
+        END CASE;
+            
+    END PROCESS;    
+    
+-- Adicionando sinal negativo aos displays, quando necessário
+
+    PROCESS(COUNT_A, COUNT_B, flagSinal)
+        BEGIN
+        
+        -- Para o operando A:
+        CASE COUNT_A(3) IS
+            WHEN '1' => OUTPUT_7SEGMENT_7 <= "0111111";
+            WHEN OTHERS => OUTPUT_7SEGMENT_7 <= "1111111";
+        END CASE;
+        
+        -- Para o operando B:    
+        CASE COUNT_B(3) IS
+            WHEN '1' => OUTPUT_7SEGMENT_5 <= "0111111";
+            WHEN OTHERS => OUTPUT_7SEGMENT_5 <= "1111111";      
+        END CASE;
+        
+        -- Para o resultado:
+        CASE flagSinal IS
+            WHEN '1' => OUTPUT_7SEGMENT_1 <= "0111111";
+            WHEN OTHERS => OUTPUT_7SEGMENT_1 <= "1111111";
+        END CASE;
+        
+        -- Apagando os displays apenas quando uma operação lógica é selecionada
+        CASE seletor IS
+            WHEN "101" => OUTPUT_7SEGMENT_7 <= "1111111";
+                          OUTPUT_7SEGMENT_5 <= "1111111";
+                          OUTPUT_7SEGMENT_1 <= "1111111";
+
+            WHEN "110" => OUTPUT_7SEGMENT_7 <= "1111111";
+                          OUTPUT_7SEGMENT_5 <= "1111111";
+                          OUTPUT_7SEGMENT_1 <= "1111111";                          
+                          
+            WHEN "111" => OUTPUT_7SEGMENT_7 <= "1111111";
+                          OUTPUT_7SEGMENT_5 <= "1111111";
+                          OUTPUT_7SEGMENT_1 <= "1111111";                            
+            
+            WHEN OTHERS => NULL;
+        END CASE;        
+    END PROCESS;    
+    
+-- Acendendo LEDS apenas quando uma operação lógica é selecionada
+
+    PROCESS(seletor, COUNT_A, COUNT_B, SAIDA)
+        BEGIN
+        
+        -- Para o operando A:
+        CASE seletor IS
+            WHEN "101" => OUTPUT_RLEDS(17 DOWNTO 14) <= COUNT_A;
+            WHEN "110" => OUTPUT_RLEDS(17 DOWNTO 14) <= COUNT_A;
+            WHEN "111" => OUTPUT_RLEDS(17 DOWNTO 14) <= COUNT_A;
+            WHEN OTHERS => OUTPUT_RLEDS(17 DOWNTO 14) <= "0000";
+        END CASE;    
+        
+        -- Para o operando B:
+        CASE seletor IS
+            WHEN "101" => OUTPUT_RLEDS(12 DOWNTO 9) <= COUNT_B;
+            WHEN "110" => OUTPUT_RLEDS(12 DOWNTO 9) <= COUNT_B;
+            WHEN "111" => OUTPUT_RLEDS(12 DOWNTO 9) <= COUNT_B;
+            WHEN OTHERS => OUTPUT_RLEDS(12 DOWNTO 9) <= "0000";
+        END CASE; 
+        
+        -- Para o resultado:
+        CASE seletor IS
+            WHEN "101" => OUTPUT_RLEDS(7 DOWNTO 4) <= SAIDA;
+            WHEN "110" => OUTPUT_RLEDS(7 DOWNTO 4) <= SAIDA;
+            WHEN "111" => OUTPUT_RLEDS(7 DOWNTO 4) <= SAIDA;
+            WHEN OTHERS => OUTPUT_RLEDS(7 DOWNTO 4) <= "0000";
+        END CASE;    
+    END PROCESS;
+
+-- Exibindo as flags:
+
+    PROCESS(seletor)
+        BEGIN
+        CASE seletor IS
+        -- Quando são selecionadas operações lógicas, vamos mostrar apenas a flag zero.
+            WHEN "101" => OUTPUT_GLEDS <= "00" & flagZero & "0"; 
+            WHEN "110" => OUTPUT_GLEDS <= "00" & flagZero & "0"; 
+            WHEN "111" => OUTPUT_GLEDS <= "00" & flagZero & "0"; 
+            
+        -- Caso não selecionemos operações lógicas, as flags aparecem normalmente.
+            WHEN OTHERS => OUTPUT_GLEDS <= (flagCout,flagOver,flagZero,flagSinal);
+        END CASE;        
+    END PROCESS;        
+        
+END TOP;
